@@ -1,0 +1,283 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Tenant {
+  id               String            @id @default(uuid())
+  name             String
+  subdomain        String?           @unique
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  users            User[]
+  companies        Company[]
+  customers        Customer[]
+  mappingTemplates MappingTemplate[]
+  invoiceBatches   InvoiceBatch[]
+  invoices         Invoice[]
+  auditLogs        AuditLog[]
+  customerGroups   CustomerGroup[]
+
+  @@map("tenants")
+}
+
+enum UserRole {
+  ADMIN
+  ACCOUNTANT
+  VIEWER
+}
+
+model User {
+  id             String         @id @default(uuid())
+  tenantId       String
+  tenant         Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  email          String         @unique
+  passwordHash   String
+  firstName      String?
+  lastName       String?
+  role           UserRole       @default(VIEWER)
+  isActive       Boolean        @default(true)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  invoiceBatches InvoiceBatch[]
+  auditLogs      AuditLog[]
+
+  @@map("users")
+}
+
+model Company {
+  id                String         @id @default(uuid())
+  tenantId          String
+  tenant            Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  legalName         String
+  tradeName         String?
+  gstin             String
+  pan               String
+  addressLine1      String
+  addressLine2      String?
+  city              String
+  state             String
+  stateCode         String
+  pinCode           String
+  email             String
+  phone             String
+  bankName          String?
+  bankAccountNo     String?
+  bankIfsc          String?
+  bankBranch        String?
+  invoicePrefix     String?
+  invoiceStartingNo Int            @default(1)
+  invoiceTemplateId String         @default("standard_gst")
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+  invoiceBatches    InvoiceBatch[]
+  invoices          Invoice[]
+
+  @@map("companies")
+}
+
+model Customer {
+  id             String                @id @default(uuid())
+  tenantId       String
+  tenant         Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  legalName      String
+  customerCode   String?
+  gstin          String?
+  pan            String?
+  addressLine1   String
+  addressLine2   String?
+  city           String
+  state          String
+  stateCode      String
+  pinCode        String
+  email          String?
+  phone          String?
+  contactPerson  String?
+  defaultTaxType String                @default("GST")
+  isActive       Boolean               @default(true)
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+  invoices       Invoice[]
+  groupMembers   CustomerGroupMember[]
+
+  @@map("customers")
+}
+
+model MappingTemplate {
+  id        String   @id @default(uuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name      String
+  mapping   Json
+  createdAt DateTime @default(now())
+
+  @@map("mapping_templates")
+}
+
+enum BatchStatus {
+  UPLOADED
+  VALIDATING
+  VALIDATED
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+model InvoiceBatch {
+  id              String           @id @default(uuid())
+  tenantId        String
+  tenant          Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  companyId       String?
+  company         Company?         @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  uploadedBy      String?
+  user            User?            @relation(fields: [uploadedBy], references: [id], onDelete: SetNull)
+  fileName        String
+  status          BatchStatus      @default(UPLOADED)
+  totalRows       Int              @default(0)
+  validRows       Int              @default(0)
+  warningRows     Int              @default(0)
+  errorRows       Int              @default(0)
+  duplicateRows   Int              @default(0)
+  zipStorageKey   String?
+  errorReportKey  String?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  importRowLogs   ImportRowLog[]
+  invoices        Invoice[]
+
+  @@map("invoice_batches")
+}
+
+enum RowValidationStatus {
+  VALID
+  WARNING
+  ERROR
+}
+
+model ImportRowLog {
+  id         String              @id @default(uuid())
+  batchId    String
+  batch      InvoiceBatch        @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  rowNumber  Int
+  data       Json
+  status     RowValidationStatus @default(VALID)
+  issues     Json?
+  createdAt  DateTime            @default(now())
+
+  @@map("import_row_logs")
+}
+
+enum InvoiceStatus {
+  PENDING
+  PROCESSING
+  GENERATED
+  FAILED
+  CANCELLED
+}
+
+model Invoice {
+  id             String         @id @default(uuid())
+  tenantId       String
+  tenant         Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  batchId        String?
+  batch          InvoiceBatch?  @relation(fields: [batchId], references: [id], onDelete: SetNull)
+  companyId      String
+  company        Company        @relation(fields: [companyId], references: [id])
+  customerId     String
+  customer       Customer       @relation(fields: [customerId], references: [id])
+  invoiceNumber  String
+  invoiceDate    DateTime
+  placeOfSupply  String
+  taxableAmount  Decimal        @db.Decimal(15, 4)
+  cgstAmount     Decimal        @default(0) @db.Decimal(15, 4)
+  sgstAmount     Decimal        @default(0) @db.Decimal(15, 4)
+  igstAmount     Decimal        @default(0) @db.Decimal(15, 4)
+  totalTax       Decimal        @default(0) @db.Decimal(15, 4)
+  discountAmount Decimal        @default(0) @db.Decimal(15, 4)
+  totalAmount    Decimal        @db.Decimal(15, 4)
+  roundOffAmount Decimal        @default(0) @db.Decimal(15, 4)
+  poNumber       String?
+  poDate         DateTime?
+  dueDate        DateTime?
+  remarks        String?
+  pdfStorageKey  String?
+  status         InvoiceStatus  @default(PENDING)
+  errorMessage   String?
+  version        Int            @default(1)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  items          InvoiceItem[]
+
+  @@unique([tenantId, companyId, invoiceNumber])
+  @@map("invoices")
+}
+
+model InvoiceItem {
+  id           String   @id @default(uuid())
+  invoiceId    String
+  invoice      Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  hsnSac       String
+  description  String
+  quantity     Decimal  @db.Decimal(12, 4)
+  unit         String
+  rate         Decimal  @db.Decimal(15, 4)
+  discount     Decimal  @default(0) @db.Decimal(15, 4)
+  taxableValue Decimal  @db.Decimal(15, 4)
+  gstRate      Decimal  @db.Decimal(5, 2)
+  cgstRate     Decimal  @default(0) @db.Decimal(5, 2)
+  sgstRate     Decimal  @default(0) @db.Decimal(5, 2)
+  igstRate     Decimal  @default(0) @db.Decimal(5, 2)
+  cgstAmount   Decimal  @default(0) @db.Decimal(15, 4)
+  sgstAmount   Decimal  @default(0) @db.Decimal(15, 4)
+  igstAmount   Decimal  @default(0) @db.Decimal(15, 4)
+  totalAmount  Decimal  @db.Decimal(15, 4)
+
+  @@map("invoice_items")
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  tenantId   String
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action     String
+  entityName String?
+  entityId   String?
+  ipAddress  String?
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  @@map("audit_logs")
+}
+
+model CustomerGroup {
+  id                 String                @id @default(uuid())
+  tenantId           String
+  tenant             Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name               String
+  defaultAmount      Decimal               @db.Decimal(15, 4)
+  defaultDescription String
+  hsnSac             String                @default("9983")
+  gstRate            Decimal               @default(18.0) @db.Decimal(5, 2)
+  createdAt          DateTime              @default(now())
+  updatedAt          DateTime              @updatedAt
+  members            CustomerGroupMember[]
+
+  @@map("customer_groups")
+}
+
+model CustomerGroupMember {
+  id         String        @id @default(uuid())
+  groupId    String
+  group      CustomerGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  customerId String
+  customer   Customer      @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, customerId])
+  @@map("customer_group_members")
+}

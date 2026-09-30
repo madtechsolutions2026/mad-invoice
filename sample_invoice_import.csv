@@ -1,0 +1,6 @@
+Invoice No,Invoice Date,Customer Code,Customer Name,Customer GSTIN,Customer Address,Customer City,Customer State,Customer State Code,Customer PIN Code,HSN/SAC,Item Description,Qty,Unit,Rate,Discount,GST %,PO Number
+MTS-1001,2026-08-21,CUST-BETA,Beta Retail Solutions,27DDDDD4444D1Z4,Andheri Kurla Road,Mumbai,Maharashtra,27,400059,998311,Software Integration Consulting,10,Hours,1500,0,18,PO-99228
+MTS-1001,2026-08-21,CUST-BETA,Beta Retail Solutions,27DDDDD4444D1Z4,Andheri Kurla Road,Mumbai,Maharashtra,27,400059,998313,Database Cloud Deployment Service,1,Job,25000,500,18,PO-99228
+MTS-1002,2026-08-21,CUST-ALPHA,Alpha Technologies Inc,27CCCCC3333C1Z3,Sector V Salt Lake,Kolkata,West Bengal,19,700091,997331,API Management Subscription,1,Month,12000,0,18,PO-99229
+MTS-1003,2026-08-21,CUST-GAMMA,Gamma Logistics Ltd,29EEEEE5555E1Z5,Electronic City Phase 1,Bengaluru,Karnataka,29,560100,8471,Network Server Firewall Device,2,Nos,45000,1000,18,PO-99230
+MTS-1004,2026-08-21,CUST-BETA,Beta Retail Solutions,27DDDDD4444D1Z4,Andheri Kurla Road,Mumbai,Maharashtra,27,400059,998311,Technical Documentation Writing,5,Hours,1000,0,18,PO-99231
