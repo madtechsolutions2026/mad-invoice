@@ -98,7 +98,7 @@ function App() {
             <div className="inline-flex p-3 rounded-full bg-blue-100 text-blue-600 mb-4">
               <Building2 className="h-8 w-8" />
             </div>
-            <h2 className="text-3xl font-extrabold text-slate-950">MadTech Solutions</h2>
+            <h2 className="text-3xl font-extrabold text-slate-950">Shaik & Reddy Associates</h2>
             <p className="mt-2 text-sm text-slate-500">Bulk Invoice Generation & Management</p>
           </div>
           
@@ -199,7 +199,7 @@ function App() {
         <div className="h-16 px-6 border-b border-slate-800 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Building2 className="h-6 w-6 text-blue-500" />
-            <span className="font-bold text-lg text-white">MadTech Billing</span>
+            <span className="font-bold text-lg text-white">S&R Associates</span>
           </div>
           <button className="md:hidden text-slate-400 hover:text-white" onClick={() => setIsSidebarOpen(false)}>
             <X className="h-5 w-5" />
