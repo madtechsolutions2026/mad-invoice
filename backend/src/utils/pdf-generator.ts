@@ -207,9 +207,9 @@ async function buildPage(
   }
 
   // Advance past firm name
-  const firmNameH = doc.heightOfString(
+  const firmNameH = doc.font('NotoSans-Bold').fontSize(SZ_FIRM_NAME).heightOfString(
     (company.legalName || '').toUpperCase(),
-    { font: 'NotoSans-Bold', fontSize: SZ_FIRM_NAME, width: CW - 160 },
+    { width: CW - 160 },
   );
   y += Math.max(firmNameH, 18) + 4;
 
@@ -388,12 +388,12 @@ async function buildPage(
 
     // Measure how tall the description will be at cItem width
     // This is the key to FIX 3: real, not assumed, row height
-    const descH   = doc.heightOfString(desc, {
-      font: 'NotoSans-Bold', fontSize: SZ_BODY, width: cItem,
+    const descH   = doc.font('NotoSans-Bold').fontSize(SZ_BODY).heightOfString(desc, {
+      width: cItem,
     });
     const hsnLine = item.hsnSac ? `HSN/SAC: ${item.hsnSac}` : '';
     const hsnH    = hsnLine
-      ? doc.heightOfString(hsnLine, { font: 'NotoSans', fontSize: 8, width: cItem })
+      ? doc.font('NotoSans').fontSize(8).heightOfString(hsnLine, { width: cItem })
       : 0;
     const ROW_PAD = 6;
     const rowH    = Math.max(descH + (hsnH ? hsnH + 2 : 0), SZ_BODY) + ROW_PAD * 2;
