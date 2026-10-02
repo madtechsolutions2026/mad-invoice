@@ -44,12 +44,12 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 // ─── Font paths (NotoSans has full Unicode coverage including ₹) ─────────────
-const FONTS_DIR   = path.join(__dirname, '../assets/fonts');
+const FONTS_DIR   = path.join(process.cwd(), 'src/assets/fonts');
 const FONT_REG    = path.join(FONTS_DIR, 'NotoSans-Regular.ttf');
 const FONT_BOLD   = path.join(FONTS_DIR, 'NotoSans-Bold.ttf');
 
 // ─── Logo path ────────────────────────────────────────────────────────────────
-const LOGO_PATH   = path.join(__dirname, '../assets/logo.png');
+const LOGO_PATH   = path.join(process.cwd(), 'src/assets/logo.png');
 
 // ─── Colour palette matching the reference PDF ───────────────────────────────
 const C_BLUE      = '#2563EB';   // "INVOICE" title, table top-line
