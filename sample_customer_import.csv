@@ -1,0 +1,4 @@
+Customer Name,Customer Code,GSTIN,PAN,Address Line 1,Address Line 2,City,State,State Code,PIN Code,Email,Phone,Contact Person,Tax Type
+Alpha Technologies Inc,ALPHA-001,27CCCCC3333C1Z3,CCCCC3333C,Sector V Salt Lake,,Kolkata,West Bengal,19,700091,alpha@example.com,9000000001,Rajesh Kumar,GST
+Beta Retail Solutions,BETA-002,27DDDDD4444D1Z4,DDDDD4444D,Andheri Kurla Road,,Mumbai,Maharashtra,27,400059,beta@example.com,9000000002,Priya Sharma,GST
+Gamma Logistics Ltd,GAMMA-003,29EEEEE5555E1Z5,EEEEE5555E,Electronic City Phase 1,,Bengaluru,Karnataka,29,560100,gamma@example.com,9000000003,Suresh Reddy,IGST

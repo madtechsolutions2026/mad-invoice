@@ -1,3 +1,4 @@
+import * as path from 'path';
 import { Router, Request, Response } from 'express';
 import prisma from '../../config/db';
 import { authMiddleware } from '../../middleware/auth.middleware';
@@ -14,6 +15,7 @@ router.get('/', authMiddleware, async (req: Request, res: Response) => {
   const status = req.query.status as string || 'all';
   const companyId = req.query.companyId as string || '';
   const batchId = req.query.batchId as string || '';
+  const paymentStatus = req.query.paymentStatus as string || '';
 
   const skip = (page - 1) * limit;
 
@@ -23,6 +25,7 @@ router.get('/', authMiddleware, async (req: Request, res: Response) => {
       ...(status !== 'all' && { status }),
       ...(companyId && { companyId }),
       ...(batchId && { batchId }),
+      ...(paymentStatus && paymentStatus !== 'all' && { paymentStatus }),
       ...(search && {
         OR: [
           { invoiceNumber: { contains: search, mode: 'insensitive' } },
@@ -137,5 +140,48 @@ router.get('/:id', authMiddleware, async (req: Request, res: Response) => {
   }
 });
 
+// PATCH /api/invoices/:id/payment - Update payment status
+router.patch('/:id/payment', authMiddleware, async (req: Request, res: Response) => {
+  const { paymentStatus, paymentDate, paymentAmount, paymentNote } = req.body;
+
+  if (!paymentStatus || !['PAID', 'UNPAID', 'PARTIAL'].includes(paymentStatus)) {
+    return res.status(400).json({ error: 'Invalid paymentStatus. Must be PAID, UNPAID, or PARTIAL' });
+  }
+
+  try {
+    const invoice = await prisma.invoice.findFirst({
+      where: { id: req.params.id, tenantId: req.tenantId },
+    });
+
+    if (!invoice) {
+      return res.status(404).json({ error: 'Invoice not found' });
+    }
+
+    const updated = await prisma.invoice.update({
+      where: { id: req.params.id },
+      data: {
+        paymentStatus,
+        paymentDate: paymentDate ? new Date(paymentDate) : null,
+        paymentAmount: paymentAmount ? parseFloat(paymentAmount) : null,
+        paymentNote: paymentNote || null,
+      },
+    });
+
+    await logAuditAction({
+      tenantId: req.tenantId,
+      userId: req.userId,
+      action: 'INVOICE_PAYMENT_UPDATED',
+      entityName: 'Invoice',
+      entityId: invoice.id,
+      ipAddress: req.ip,
+      metadata: { paymentStatus, paymentAmount },
+    });
+
+    return res.json(updated);
+  } catch (error) {
+    console.error('Payment update error:', error);
+    return res.status(500).json({ error: 'Failed to update payment status' });
+  }
+});
+
 export default router;
-import * as path from 'path';

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Users, Plus, Edit, X, Save, Search, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Users, Plus, Edit, X, Save, Search, ChevronLeft, ChevronRight, Upload, Download, FileSpreadsheet } from 'lucide-react';
 
 interface Customer {
   id: string;
@@ -45,6 +45,10 @@ function Customers() {
     defaultTaxType: 'GST',
     isActive: true,
   });
+
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState<{summary: any, errors: string[]} | null>(null);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   const fetchCustomers = () => {
     setLoading(true);
@@ -109,6 +113,44 @@ function Customers() {
     }
   };
 
+  const handleDownloadTemplate = () => {
+    const csvContent = 'Customer Name,Customer Code,GSTIN,PAN,Address Line 1,Address Line 2,City,State,State Code,PIN Code,Email,Phone,Contact Person,Tax Type\nAlpha Technologies Inc,ALPHA-001,27CCCCC3333C1Z3,CCCCC3333C,Sector V Salt Lake,,Kolkata,West Bengal,19,700091,alpha@example.com,9000000001,Rajesh Kumar,GST';
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'Customer_Import_Template.csv';
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImporting(true);
+    setImportResult(null);
+    const formData = new FormData();
+    formData.append('file', file);
+    try {
+      const res = await axios.post('/api/customers/bulk-import', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      setImportResult(res.data);
+      fetchCustomers();
+    } catch (err: any) {
+      setImportResult({ summary: null, errors: [err.response?.data?.error || 'Import failed'] });
+    } finally {
+      setImporting(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const handleExportExcel = () => {
+    const link = document.createElement('a');
+    link.href = '/api/customers/export';
+    link.click();
+  };
+
   return (
     <div className="space-y-6">
       
@@ -129,6 +171,36 @@ function Customers() {
                 className="pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 w-56 md:w-64 shadow-sm"
               />
             </div>
+            {/* Hidden file input */}
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleImportFile}
+              accept=".csv,.xlsx,.xls"
+              className="hidden"
+            />
+            <button
+              onClick={handleDownloadTemplate}
+              className="px-3 py-2 border border-slate-200 hover:bg-slate-50 text-slate-600 font-medium rounded-lg text-sm transition-colors flex items-center gap-1.5"
+            >
+              <FileSpreadsheet className="h-4 w-4" />
+              Template
+            </button>
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={importing}
+              className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-medium rounded-lg text-sm transition-colors flex items-center gap-1.5"
+            >
+              <Upload className="h-4 w-4" />
+              {importing ? 'Importing...' : 'Import CSV'}
+            </button>
+            <button
+              onClick={handleExportExcel}
+              className="px-3 py-2 bg-slate-700 hover:bg-slate-800 text-white font-medium rounded-lg text-sm transition-colors flex items-center gap-1.5"
+            >
+              <Download className="h-4 w-4" />
+              Export Excel
+            </button>
             <button
               onClick={handleNewClick}
               className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg text-sm transition-colors flex items-center gap-1.5 shrink-0"
@@ -139,6 +211,26 @@ function Customers() {
           </div>
         )}
       </div>
+
+      {importResult && (
+        <div className={`p-4 rounded-xl border text-sm ${
+          importResult.errors.length > 0 && !importResult.summary
+            ? 'bg-red-50 border-red-200 text-red-800'
+            : 'bg-emerald-50 border-emerald-200 text-emerald-800'
+        }`}>
+          {importResult.summary && (
+            <p className="font-semibold">
+              Import complete: {importResult.summary.created} created, {importResult.summary.updated} updated, {importResult.summary.skipped} skipped (of {importResult.summary.totalRows} rows)
+            </p>
+          )}
+          {importResult.errors.length > 0 && (
+            <ul className="mt-2 space-y-1 list-disc list-inside text-xs">
+              {importResult.errors.map((err, i) => <li key={i}>{err}</li>)}
+            </ul>
+          )}
+          <button onClick={() => setImportResult(null)} className="mt-2 text-xs underline opacity-70">Dismiss</button>
+        </div>
+      )}
 
       {isEditing ? (
         <form onSubmit={handleFormSubmit} className="bg-white p-6 border border-slate-200 rounded-xl shadow-sm space-y-6 max-w-3xl">

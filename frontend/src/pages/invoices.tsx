@@ -9,7 +9,9 @@ import {
   Building2, 
   Filter,
   CheckCircle2,
-  AlertCircle
+  AlertCircle,
+  CreditCard,
+  X
 } from 'lucide-react';
 
 interface Invoice {
@@ -23,12 +25,162 @@ interface Invoice {
   totalAmount: number;
   status: string;
   pdfStorageKey?: string;
+  paymentStatus: 'PAID' | 'UNPAID' | 'PARTIAL';
+  paymentDate?: string;
+  paymentAmount?: number;
+  paymentNote?: string;
 }
 
 interface Company {
   id: string;
   legalName: string;
 }
+
+interface PaymentForm {
+  paymentStatus: 'PAID' | 'UNPAID' | 'PARTIAL';
+  paymentDate: string;
+  paymentAmount: string;
+  paymentNote: string;
+}
+
+function PaymentModal({ invoice, onClose, onSaved }: { invoice: Invoice; onClose: () => void; onSaved: () => void }) {
+  const [form, setForm] = useState<PaymentForm>({
+    paymentStatus: invoice.paymentStatus || 'UNPAID',
+    paymentDate: invoice.paymentDate ? new Date(invoice.paymentDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+    paymentAmount: invoice.paymentAmount?.toString() || parseFloat(invoice.totalAmount.toString()).toFixed(2),
+    paymentNote: invoice.paymentNote || '',
+  });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    setError('');
+    try {
+      await axios.patch(`/api/invoices/${invoice.id}/payment`, {
+        paymentStatus: form.paymentStatus,
+        paymentDate: form.paymentDate || null,
+        paymentAmount: form.paymentAmount ? parseFloat(form.paymentAmount) : null,
+        paymentNote: form.paymentNote || null,
+      });
+      onSaved();
+      onClose();
+    } catch (err: any) {
+      setError(err?.response?.data?.error || 'Failed to update payment status');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-xl border border-slate-200 shadow-xl w-full max-w-md">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+          <div>
+            <h3 className="text-sm font-bold text-slate-900">Mark Payment</h3>
+            <p className="text-xs text-slate-500 mt-0.5">{invoice.invoiceNumber}</p>
+          </div>
+          <button onClick={onClose} className="p-1 rounded hover:bg-slate-100">
+            <X className="h-4 w-4 text-slate-500" />
+          </button>
+        </div>
+        <form onSubmit={handleSubmit} className="p-5 space-y-4">
+          {error && (
+            <div className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</div>
+          )}
+          <div>
+            <label className="block text-xs font-semibold text-slate-600 mb-1">Payment Status</label>
+            <select
+              value={form.paymentStatus}
+              onChange={e => setForm({ ...form, paymentStatus: e.target.value as PaymentForm['paymentStatus'] })}
+              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="PAID">PAID</option>
+              <option value="PARTIAL">PARTIAL</option>
+              <option value="UNPAID">UNPAID</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-slate-600 mb-1">Payment Date</label>
+            <input
+              type="date"
+              value={form.paymentDate}
+              onChange={e => setForm({ ...form, paymentDate: e.target.value })}
+              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-slate-600 mb-1">Amount Received (₹)</label>
+            <input
+              type="number"
+              step="0.01"
+              value={form.paymentAmount}
+              onChange={e => setForm({ ...form, paymentAmount: e.target.value })}
+              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="0.00"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-slate-600 mb-1">Note (optional)</label>
+            <textarea
+              value={form.paymentNote}
+              onChange={e => setForm({ ...form, paymentNote: e.target.value })}
+              rows={2}
+              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+              placeholder="e.g. Paid via NEFT, reference #..."
+            />
+          </div>
+          <div className="flex gap-2 pt-1">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 px-4 py-2 border border-slate-200 text-slate-600 rounded-lg text-sm font-medium hover:bg-slate-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={saving}
+              className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold disabled:opacity-60"
+            >
+              {saving ? 'Saving...' : 'Save Payment'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function PaymentBadge({ status }: { status: string }) {
+  if (status === 'PAID') {
+    return (
+      <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase inline-flex items-center gap-1 bg-emerald-50 text-emerald-700">
+        🟢 PAID
+      </span>
+    );
+  }
+  if (status === 'PARTIAL') {
+    return (
+      <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase inline-flex items-center gap-1 bg-amber-50 text-amber-700">
+        🟡 PARTIAL
+      </span>
+    );
+  }
+  return (
+    <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase inline-flex items-center gap-1 bg-red-50 text-red-700">
+      🔴 UNPAID
+    </span>
+  );
+}
+
+const PAYMENT_TABS = [
+  { label: 'All', value: 'all' },
+  { label: 'Paid', value: 'PAID' },
+  { label: 'Unpaid', value: 'UNPAID' },
+  { label: 'Partial', value: 'PARTIAL' },
+];
 
 function Invoices() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
@@ -39,8 +191,12 @@ function Invoices() {
   const [search, setSearch] = useState('');
   const [companyId, setCompanyId] = useState('');
   const [status, setStatus] = useState('all');
+  const [paymentStatus, setPaymentStatus] = useState('all');
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+
+  // Payment modal state
+  const [paymentModalInvoice, setPaymentModalInvoice] = useState<Invoice | null>(null);
 
   useEffect(() => {
     // Load company profiles for dropdown
@@ -56,6 +212,7 @@ function Invoices() {
         search,
         status,
         companyId,
+        paymentStatus,
       }
     })
       .then(res => {
@@ -68,7 +225,7 @@ function Invoices() {
 
   useEffect(() => {
     fetchInvoices();
-  }, [page, search, status, companyId]);
+  }, [page, search, status, companyId, paymentStatus]);
 
   const handleDownload = async (pdfStorageKey: string, invoiceNumber: string) => {
     try {
@@ -93,6 +250,14 @@ function Invoices() {
   return (
     <div className="space-y-6">
       
+      {paymentModalInvoice && (
+        <PaymentModal
+          invoice={paymentModalInvoice}
+          onClose={() => setPaymentModalInvoice(null)}
+          onSaved={fetchInvoices}
+        />
+      )}
+
       <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
         <div>
           <h2 className="text-xl font-bold text-slate-900">Invoices Directory</h2>
@@ -143,6 +308,23 @@ function Invoices() {
           </select>
         </div>
 
+        {/* Payment status filter tabs */}
+        <div className="flex items-center gap-1 bg-slate-100 rounded-lg p-1">
+          {PAYMENT_TABS.map(tab => (
+            <button
+              key={tab.value}
+              onClick={() => { setPaymentStatus(tab.value); setPage(1); }}
+              className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors ${
+                paymentStatus === tab.value
+                  ? 'bg-white text-slate-900 shadow-sm'
+                  : 'text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
       </div>
 
       {/* Invoices table data container */}
@@ -163,6 +345,7 @@ function Invoices() {
                   <th className="px-6 py-3.5">Taxable Val</th>
                   <th className="px-6 py-3.5">Grand Total</th>
                   <th className="px-6 py-3.5">Status</th>
+                  <th className="px-6 py-3.5">Payment</th>
                   <th className="px-6 py-3.5 text-right">Actions</th>
                 </tr>
               </thead>
@@ -187,18 +370,30 @@ function Invoices() {
                         {inv.status}
                       </span>
                     </td>
+                    <td className="px-6 py-4">
+                      <PaymentBadge status={inv.paymentStatus || 'UNPAID'} />
+                    </td>
                     <td className="px-6 py-4 text-right">
-                      {inv.pdfStorageKey ? (
+                      <div className="flex items-center gap-2 justify-end">
                         <button
-                          onClick={() => handleDownload(inv.pdfStorageKey!, inv.invoiceNumber)}
-                          className="px-3.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg text-xs font-semibold flex items-center gap-1 ml-auto"
+                          onClick={() => setPaymentModalInvoice(inv)}
+                          className="px-3 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 rounded-lg text-xs font-semibold flex items-center gap-1 border border-slate-200"
                         >
-                          <Download className="h-3.5 w-3.5" />
-                          PDF
+                          <CreditCard className="h-3.5 w-3.5" />
+                          Mark Payment
                         </button>
-                      ) : (
-                        <span className="text-xs text-slate-400 font-medium">Processing...</span>
-                      )}
+                        {inv.pdfStorageKey ? (
+                          <button
+                            onClick={() => handleDownload(inv.pdfStorageKey!, inv.invoiceNumber)}
+                            className="px-3.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg text-xs font-semibold flex items-center gap-1"
+                          >
+                            <Download className="h-3.5 w-3.5" />
+                            PDF
+                          </button>
+                        ) : (
+                          <span className="text-xs text-slate-400 font-medium">Processing...</span>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}

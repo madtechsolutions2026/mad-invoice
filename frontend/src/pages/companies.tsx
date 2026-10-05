@@ -14,7 +14,9 @@ import {
   FileText, 
   ChevronLeft, 
   ChevronRight,
-  Sparkles
+  Sparkles,
+  Upload,
+  Image
 } from 'lucide-react';
 
 interface Company {
@@ -38,12 +40,20 @@ interface Company {
   invoicePrefix?: string;
   invoiceStartingNo: number;
   invoiceTemplateId: string;
+  logoStorageKey?: string;
+  stampStorageKey?: string;
+  authorizedSignatoryName?: string;
+  authorizedSignatoryDesignation?: string;
 }
 
 function Companies() {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [uploadingStamp, setUploadingStamp] = useState(false);
+  const [logoMsg, setLogoMsg] = useState('');
+  const [stampMsg, setStampMsg] = useState('');
   
   // Search, Filter & View Controls
   const [searchTerm, setSearchTerm] = useState('');
@@ -150,7 +160,11 @@ function Companies() {
       invoicePrefix: 'INV/',
       invoiceStartingNo: 1,
       invoiceTemplateId: 'standard_gst',
+      authorizedSignatoryName: '',
+      authorizedSignatoryDesignation: 'Authorized Signatory',
     });
+    setLogoMsg('');
+    setStampMsg('');
     setIsEditing(true);
   };
 
@@ -159,11 +173,59 @@ function Companies() {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !formData.id) return;
+    setUploadingLogo(true);
+    setLogoMsg('');
+    const data = new FormData();
+    data.append('logo', file);
+    try {
+      const res = await axios.post(`/api/companies/${formData.id}/logo`, data, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      setFormData(prev => ({ ...prev, logoStorageKey: res.data.logoStorageKey }));
+      setLogoMsg('Logo uploaded successfully');
+      fetchCompanies();
+    } catch (err: any) {
+      setLogoMsg(err.response?.data?.error || 'Failed to upload logo');
+    } finally {
+      setUploadingLogo(false);
+    }
+  };
+
+  const handleStampUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !formData.id) return;
+    setUploadingStamp(true);
+    setStampMsg('');
+    const data = new FormData();
+    data.append('stamp', file);
+    try {
+      const res = await axios.post(`/api/companies/${formData.id}/stamp`, data, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      setFormData(prev => ({ ...prev, stampStorageKey: res.data.stampStorageKey }));
+      setStampMsg('Stamp uploaded successfully');
+      fetchCompanies();
+    } catch (err: any) {
+      setStampMsg(err.response?.data?.error || 'Failed to upload stamp');
+    } finally {
+      setUploadingStamp(false);
+    }
+  };
+
   const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
       if (formData.id) {
         await axios.put(`/api/companies/${formData.id}`, formData);
+        if (formData.authorizedSignatoryName !== undefined || formData.authorizedSignatoryDesignation !== undefined) {
+          await axios.put(`/api/companies/${formData.id}/signatory`, {
+            authorizedSignatoryName: formData.authorizedSignatoryName,
+            authorizedSignatoryDesignation: formData.authorizedSignatoryDesignation,
+          });
+        }
       } else {
         await axios.post('/api/companies', formData);
       }
@@ -304,6 +366,72 @@ function Companies() {
                 <option value="standard_gst">Standard GST Layout</option>
                 <option value="service_invoice">Service Invoicing Layout</option>
               </select>
+            </div>
+
+            <div className="md:col-span-2 pb-1 pt-3 border-b border-slate-100">
+              <h4 className="text-xs font-bold text-blue-600 uppercase tracking-wide">Branding & Signatory Details</h4>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold uppercase text-slate-500 mb-1">Company Logo (Pure White BG recommended)</label>
+              <div className="flex items-center gap-3">
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp,image/gif"
+                  onChange={handleLogoUpload}
+                  disabled={!formData.id || uploadingLogo}
+                  className="text-xs text-slate-500 file:mr-2 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer"
+                />
+                {uploadingLogo && <span className="text-xs text-blue-600 animate-pulse">Uploading...</span>}
+              </div>
+              {!formData.id && <p className="text-[11px] text-slate-400 mt-1">Save profile first to enable logo upload</p>}
+              {logoMsg && <p className="text-[11px] text-emerald-600 mt-1 font-medium">{logoMsg}</p>}
+              {formData.logoStorageKey && (
+                <p className="text-[11px] text-slate-400 mt-1 truncate">Current: {formData.logoStorageKey}</p>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold uppercase text-slate-500 mb-1">Company Rubber Stamp</label>
+              <div className="flex items-center gap-3">
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp,image/gif"
+                  onChange={handleStampUpload}
+                  disabled={!formData.id || uploadingStamp}
+                  className="text-xs text-slate-500 file:mr-2 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer"
+                />
+                {uploadingStamp && <span className="text-xs text-blue-600 animate-pulse">Uploading...</span>}
+              </div>
+              {!formData.id && <p className="text-[11px] text-slate-400 mt-1">Save profile first to enable stamp upload</p>}
+              {stampMsg && <p className="text-[11px] text-emerald-600 mt-1 font-medium">{stampMsg}</p>}
+              {formData.stampStorageKey && (
+                <p className="text-[11px] text-slate-400 mt-1 truncate">Current: {formData.stampStorageKey}</p>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold uppercase text-slate-500 mb-1">Authorized Signatory Name</label>
+              <input
+                type="text"
+                name="authorizedSignatoryName"
+                value={formData.authorizedSignatoryName || ''}
+                onChange={handleInputChange}
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:bg-white focus:border-blue-500 outline-none"
+                placeholder="e.g. Imran Khan / Managing Partner"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold uppercase text-slate-500 mb-1">Authorized Signatory Designation</label>
+              <input
+                type="text"
+                name="authorizedSignatoryDesignation"
+                value={formData.authorizedSignatoryDesignation || ''}
+                onChange={handleInputChange}
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:bg-white focus:border-blue-500 outline-none"
+                placeholder="Authorized Signatory"
+              />
             </div>
           </div>
 

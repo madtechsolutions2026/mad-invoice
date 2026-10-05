@@ -1,3 +1,4 @@
+// NOTE: Run 'npx prisma migrate dev --name add_company_branding' after payment migration
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
@@ -76,6 +77,10 @@ model Company {
   updatedAt         DateTime       @updatedAt
   invoiceBatches    InvoiceBatch[]
   invoices          Invoice[]
+  logoStorageKey                 String?
+  stampStorageKey                String?
+  authorizedSignatoryName        String?
+  authorizedSignatoryDesignation String?  @default("Authorized Signatory")
 
   @@map("companies")
 }
@@ -171,6 +176,12 @@ model ImportRowLog {
   @@map("import_row_logs")
 }
 
+enum PaymentStatus {
+  UNPAID
+  PAID
+  PARTIAL
+}
+
 enum InvoiceStatus {
   PENDING
   PROCESSING
@@ -207,6 +218,10 @@ model Invoice {
   pdfStorageKey  String?
   status         InvoiceStatus  @default(PENDING)
   errorMessage   String?
+  paymentStatus  PaymentStatus  @default(UNPAID)
+  paymentDate    DateTime?
+  paymentAmount  Decimal?       @db.Decimal(15, 4)
+  paymentNote    String?
   version        Int            @default(1)
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt

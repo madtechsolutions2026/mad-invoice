@@ -186,20 +186,31 @@ async function buildPage(
   doc.font('NotoSans-Bold').fontSize(SZ_FIRM_NAME).fillColor(C_DARK)
      .text((company.legalName || '').toUpperCase(), ML, y, { width: CW - 160 });
 
-  // ── LOGO (top-right, light-grey rounded box, ~150×130pt) ──────────────────
-  if (fs.existsSync(LOGO_PATH)) {
+  // ── LOGO (top-right, pure white background box, ~150×130pt) ──────────────────
+  let effectiveLogoPath: string | null = null;
+  if (company.logoStorageKey) {
+    const customPath = path.join(process.cwd(), 'storage', company.logoStorageKey);
+    if (fs.existsSync(customPath)) {
+      effectiveLogoPath = customPath;
+    }
+  }
+  if (!effectiveLogoPath && fs.existsSync(LOGO_PATH)) {
+    effectiveLogoPath = LOGO_PATH;
+  }
+
+  if (effectiveLogoPath) {
     const logoW = 140;
     const logoH = 120;
     const logoX = ML + CW - logoW;
     const logoY = MT - 4;
 
-    // Light-grey background box (FIX: logo on #F3F4F6, not white)
+    // Pure white background box for logo (client request: pure white background)
     doc.save()
-       .roundedRect(logoX - 4, logoY - 4, logoW + 8, logoH + 8, 6)
-       .fill(C_LOGOBG)
+       .roundedRect(logoX - 4, logoY - 4, logoW + 8, logoH + 8, 4)
+       .fill('#FFFFFF')
        .restore();
 
-    doc.image(LOGO_PATH, logoX, logoY, {
+    doc.image(effectiveLogoPath, logoX, logoY, {
       fit: [logoW, logoH],
       align: 'center',
       valign: 'center',
@@ -554,27 +565,59 @@ async function buildPage(
     bkY += SZ_BODY + 4;
   }
 
-  // ── RIGHT: Authorized Signatory ──────────────────────────────────────────
+  // ── RIGHT: Authorized Signatory + Stamp ──────────────────────────────────
   const sigNameW = CW - (SIG_X - ML);
   doc.font('NotoSans').fontSize(SZ_LABEL).fillColor(C_MUTED)
      .text(`For ${(company.legalName || '').toUpperCase()}`, SIG_X, payY, {
        width: sigNameW, align: 'right',
      });
 
-  // Signature space (~50pt) then underline + "Authorized Signatory"
-  const sigLineY = payY + 64;
-  doc.moveTo(SIG_X + sigNameW - 120, sigLineY)
+  // Render Stamp if available
+  let stampRendered = false;
+  let stampBottom = payY + 45;
+  if (company.stampStorageKey) {
+    const stampPath = path.join(process.cwd(), 'storage', company.stampStorageKey);
+    if (fs.existsSync(stampPath)) {
+      const stampW = 75;
+      const stampH = 50;
+      const stampX = SIG_X + sigNameW - stampW - 20;
+      const stampY = payY + 12;
+      doc.image(stampPath, stampX, stampY, {
+        fit: [stampW, stampH],
+        align: 'center',
+        valign: 'center',
+      });
+      stampRendered = true;
+      stampBottom = stampY + stampH;
+    }
+  }
+
+  // Signature line lowered down
+  const sigLineY = Math.max(payY + 55, stampBottom + 4);
+  doc.moveTo(SIG_X + sigNameW - 140, sigLineY)
      .lineTo(SIG_X + sigNameW, sigLineY)
      .strokeColor(C_DARK).lineWidth(0.6).stroke();
+
+  let signTextY = sigLineY + 3;
+  if (company.authorizedSignatoryName) {
+    doc.font('NotoSans-Bold').fontSize(SZ_BODY).fillColor(C_DARK)
+       .text(company.authorizedSignatoryName, SIG_X, signTextY, {
+         width: sigNameW, align: 'right',
+       });
+    signTextY += SZ_BODY + 2;
+  }
+
+  const designation = company.authorizedSignatoryDesignation || 'Authorized Signatory';
   doc.font('NotoSans').fontSize(SZ_LABEL).fillColor(C_MUTED)
-     .text('Authorized Signatory', SIG_X, sigLineY + 4, {
+     .text(designation, SIG_X, signTextY, {
        width: sigNameW, align: 'right',
      });
+  signTextY += SZ_LABEL + 2;
 
-  // Advance y past the taller of left and right blocks
+  // Advance y past the taller of left, bank, and right blocks
   const leftBlockH  = (qrBuffer ? 14 + QR_PT : 0) + 4;
-  const rightBlockH = 64 + SZ_LABEL + 8;
-  y = payY + Math.max(leftBlockH, Math.max(bkY - bankStartY, rightBlockH)) + 16;
+  const rightBlockH = (signTextY - payY) + 8;
+  y = payY + Math.max(leftBlockH, Math.max(bkY - bankStartY, rightBlockH)) + 12;
 
   // ══════════════════════════════════════════════════════════════════════════
   // SECTION 8: NOTES  (FIX 4: full-width, never clipped)
