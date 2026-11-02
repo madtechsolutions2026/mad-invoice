@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Users, Plus, Edit, X, Save, Search, ChevronLeft, ChevronRight, Upload, Download, FileSpreadsheet } from 'lucide-react';
+import { Users, Plus, Edit, X, Save, Search, ChevronLeft, ChevronRight, Upload, Download, FileSpreadsheet, Trash2, AlertTriangle } from 'lucide-react';
 
 interface Customer {
   id: string;
@@ -50,6 +50,13 @@ function Customers() {
   const [importResult, setImportResult] = useState<{summary: any, errors: string[]} | null>(null);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
+  // Deletion and bulk selection states
+  const [customerToDelete, setCustomerToDelete] = useState<Customer | null>(null);
+  const [selectedCustomerIds, setSelectedCustomerIds] = useState<string[]>([]);
+  const [isBulkDeleteModal, setIsBulkDeleteModal] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
   const fetchCustomers = () => {
     setLoading(true);
     axios.get(`/api/customers`, {
@@ -58,6 +65,7 @@ function Customers() {
       .then(res => {
         setCustomers(res.data.customers);
         setTotalPages(res.data.pagination.totalPages);
+        setSelectedCustomerIds([]);
       })
       .catch(err => console.error('Fetch customers failed:', err))
       .finally(() => setLoading(false));
@@ -151,6 +159,71 @@ function Customers() {
     link.click();
   };
 
+  const toggleSelectAll = () => {
+    if (selectedCustomerIds.length === customers.length && customers.length > 0) {
+      setSelectedCustomerIds([]);
+    } else {
+      setSelectedCustomerIds(customers.map(c => c.id));
+    }
+  };
+
+  const toggleSelectCustomer = (id: string) => {
+    setSelectedCustomerIds(prev =>
+      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+    );
+  };
+
+  const handleDeleteClick = (cust: Customer) => {
+    setCustomerToDelete(cust);
+    setIsBulkDeleteModal(false);
+    setDeleteError(null);
+  };
+
+  const handleBulkDeleteClick = () => {
+    if (selectedCustomerIds.length === 0) return;
+    setIsBulkDeleteModal(true);
+    setCustomerToDelete(null);
+    setDeleteError(null);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!customerToDelete) return;
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      await axios.delete(`/api/customers/${customerToDelete.id}`);
+      if (isEditing && formData.id === customerToDelete.id) {
+        setIsEditing(false);
+      }
+      setSelectedCustomerIds(prev => prev.filter(id => id !== customerToDelete.id));
+      setCustomerToDelete(null);
+      fetchCustomers();
+    } catch (err: any) {
+      setDeleteError(err.response?.data?.error || 'Failed to delete customer');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const handleConfirmBulkDelete = async () => {
+    if (selectedCustomerIds.length === 0) return;
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      const res = await axios.post('/api/customers/bulk-delete', { ids: selectedCustomerIds });
+      if (res.data.skipped && res.data.skipped.length > 0) {
+        alert(`Deleted ${res.data.deleted} customer(s).\n\nSkipped ${res.data.skipped.length} with existing invoices:\n- ${res.data.skipped.join('\n- ')}`);
+      }
+      setSelectedCustomerIds([]);
+      setIsBulkDeleteModal(false);
+      fetchCustomers();
+    } catch (err: any) {
+      setDeleteError(err.response?.data?.error || 'Failed to bulk delete customers');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       
@@ -160,7 +233,27 @@ function Customers() {
           <p className="text-xs text-slate-500 font-medium">Record profiles of buyers, clients, and vendor relations</p>
         </div>
         {!isEditing && (
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
+            {selectedCustomerIds.length > 0 && (
+              <div className="flex items-center gap-2 bg-red-50 border border-red-200 px-3 py-1.5 rounded-lg text-sm">
+                <span className="font-semibold text-red-700 text-xs">{selectedCustomerIds.length} selected</span>
+                <button
+                  type="button"
+                  onClick={handleBulkDeleteClick}
+                  className="px-2.5 py-1 bg-red-600 hover:bg-red-700 text-white font-medium rounded-md text-xs flex items-center gap-1 transition-colors"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  Delete Selected
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedCustomerIds([])}
+                  className="text-xs text-slate-500 hover:text-slate-800 underline ml-1"
+                >
+                  Clear
+                </button>
+              </div>
+            )}
             <div className="relative">
               <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
               <input
@@ -312,14 +405,26 @@ function Customers() {
             </div>
           </div>
 
-          <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
-            <button type="button" onClick={() => setIsEditing(false)} className="px-4 py-2 border border-slate-200 text-slate-600 rounded-lg text-sm hover:bg-slate-50">
-              Cancel
-            </button>
-            <button type="submit" className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg text-sm flex items-center gap-1.5">
-              <Save className="h-4 w-4" />
-              Save Details
-            </button>
+          <div className="flex justify-between items-center pt-4 border-t border-slate-100">
+            {formData.id ? (
+              <button
+                type="button"
+                onClick={() => handleDeleteClick(formData as Customer)}
+                className="px-4 py-2 border border-red-200 hover:bg-red-50 text-red-600 rounded-lg text-sm font-semibold flex items-center gap-1.5 transition-colors"
+              >
+                <Trash2 className="h-4 w-4 text-red-500" />
+                Delete Customer
+              </button>
+            ) : <div />}
+            <div className="flex gap-3">
+              <button type="button" onClick={() => setIsEditing(false)} className="px-4 py-2 border border-slate-200 text-slate-600 rounded-lg text-sm hover:bg-slate-50">
+                Cancel
+              </button>
+              <button type="submit" className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg text-sm flex items-center gap-1.5">
+                <Save className="h-4 w-4" />
+                Save Details
+              </button>
+            </div>
           </div>
         </form>
       ) : (
@@ -333,6 +438,15 @@ function Customers() {
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-slate-50 text-xs font-semibold text-slate-500 uppercase border-b border-slate-100">
+                    <th className="w-10 px-4 py-3.5 text-center">
+                      <input
+                        type="checkbox"
+                        className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                        checked={customers.length > 0 && selectedCustomerIds.length === customers.length}
+                        onChange={toggleSelectAll}
+                        title="Select all"
+                      />
+                    </th>
                     <th className="px-6 py-3.5">Name</th>
                     <th className="px-6 py-3.5">Code</th>
                     <th className="px-6 py-3.5">GSTIN</th>
@@ -343,7 +457,15 @@ function Customers() {
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-sm text-slate-700">
                   {customers.map(cust => (
-                    <tr key={cust.id} className="hover:bg-slate-50/50">
+                    <tr key={cust.id} className={`hover:bg-slate-50/50 transition-colors ${selectedCustomerIds.includes(cust.id) ? 'bg-blue-50/30' : ''}`}>
+                      <td className="w-10 px-4 py-4 text-center">
+                        <input
+                          type="checkbox"
+                          className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                          checked={selectedCustomerIds.includes(cust.id)}
+                          onChange={() => toggleSelectCustomer(cust.id)}
+                        />
+                      </td>
                       <td className="px-6 py-4 font-semibold text-slate-900">{cust.legalName}</td>
                       <td className="px-6 py-4">{cust.customerCode || '-'}</td>
                       <td className="px-6 py-4 text-xs font-mono">{cust.gstin || 'URD'}</td>
@@ -356,12 +478,23 @@ function Customers() {
                         <div className="text-xs text-slate-400">{cust.email}</div>
                       </td>
                       <td className="px-6 py-4 text-right">
-                        <button
-                          onClick={() => handleEditClick(cust)}
-                          className="px-3 py-1.5 border border-slate-100 hover:bg-slate-100 text-slate-600 rounded-lg text-xs font-semibold"
-                        >
-                          Edit
-                        </button>
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            onClick={() => handleEditClick(cust)}
+                            className="px-3 py-1.5 border border-slate-200 hover:bg-slate-100 text-slate-700 rounded-lg text-xs font-semibold inline-flex items-center gap-1 transition-colors"
+                          >
+                            <Edit className="h-3.5 w-3.5 text-slate-400" />
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => handleDeleteClick(cust)}
+                            className="px-3 py-1.5 border border-red-200 hover:bg-red-50 text-red-600 rounded-lg text-xs font-semibold inline-flex items-center gap-1 transition-colors"
+                            title="Delete customer"
+                          >
+                            <Trash2 className="h-3.5 w-3.5 text-red-500" />
+                            Delete
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -396,6 +529,64 @@ function Customers() {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {(customerToDelete || isBulkDeleteModal) && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-3 bg-red-100 text-red-600 rounded-xl">
+                <AlertTriangle className="h-6 w-6" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-slate-900">
+                  {isBulkDeleteModal ? `Delete ${selectedCustomerIds.length} Customers` : 'Delete Customer'}
+                </h3>
+                <p className="text-xs text-slate-500">Confirm permanent deletion</p>
+              </div>
+            </div>
+
+            {deleteError && (
+              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-xs text-red-800 leading-relaxed">
+                {deleteError}
+              </div>
+            )}
+
+            <p className="text-sm text-slate-600 mb-6 leading-relaxed">
+              {isBulkDeleteModal ? (
+                <>
+                  Are you sure you want to permanently delete the <span className="font-semibold text-slate-900">{selectedCustomerIds.length} selected customers</span>? Customers with existing invoices will be automatically protected and skipped.
+                </>
+              ) : (
+                <>
+                  Are you sure you want to delete <span className="font-semibold text-slate-900">{customerToDelete?.legalName}</span>
+                  {customerToDelete?.customerCode ? ` (${customerToDelete.customerCode})` : ''}? This action cannot be undone.
+                </>
+              )}
+            </p>
+
+            <div className="flex justify-end gap-3">
+              <button
+                type="button"
+                disabled={deleting}
+                onClick={() => { setCustomerToDelete(null); setIsBulkDeleteModal(false); setDeleteError(null); }}
+                className="px-4 py-2 border border-slate-200 text-slate-700 rounded-lg text-sm font-medium hover:bg-slate-50 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={deleting}
+                onClick={isBulkDeleteModal ? handleConfirmBulkDelete : handleConfirmDelete}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-semibold flex items-center gap-1.5 disabled:opacity-50 shadow-sm shadow-red-200"
+              >
+                <Trash2 className="h-4 w-4" />
+                {deleting ? 'Deleting...' : 'Delete Permanently'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

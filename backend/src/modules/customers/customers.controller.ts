@@ -375,4 +375,120 @@ router.put('/:id', authMiddleware, async (req: Request, res: Response) => {
   }
 });
 
+// DELETE /api/customers/:id - Delete a customer
+router.delete('/:id', authMiddleware, async (req: Request, res: Response) => {
+  try {
+    const customer = await prisma.customer.findFirst({
+      where: {
+        id: req.params.id,
+        tenantId: req.tenantId,
+      },
+    });
+
+    if (!customer) {
+      return res.status(404).json({ error: 'Customer not found' });
+    }
+
+    // Check if customer has any associated invoices
+    const invoiceCount = await prisma.invoice.count({
+      where: {
+        customerId: req.params.id,
+        tenantId: req.tenantId,
+      },
+    });
+
+    if (invoiceCount > 0) {
+      return res.status(400).json({
+        error: `Cannot delete "${customer.legalName}" because ${invoiceCount} invoice(s) are associated with them. Please mark them as inactive instead to preserve accounting history.`,
+      });
+    }
+
+    // Remove from customer group members first if present
+    await prisma.customerGroupMember.deleteMany({
+      where: { customerId: req.params.id },
+    });
+
+    // Delete customer
+    await prisma.customer.delete({
+      where: { id: req.params.id },
+    });
+
+    await logAuditAction({
+      tenantId: req.tenantId,
+      userId: req.userId,
+      action: 'CUSTOMER_DELETED',
+      entityName: 'Customer',
+      entityId: customer.id,
+      metadata: { legalName: customer.legalName, customerCode: customer.customerCode },
+      ipAddress: req.ip,
+    });
+
+    return res.json({ success: true, message: `Customer "${customer.legalName}" was deleted successfully.` });
+  } catch (error: any) {
+    console.error('Delete customer error:', error);
+    return res.status(500).json({ error: error.message || 'Failed to delete customer' });
+  }
+});
+
+// POST /api/customers/bulk-delete - Delete multiple customers
+router.post('/bulk-delete', authMiddleware, async (req: Request, res: Response) => {
+  const { ids } = req.body;
+
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return res.status(400).json({ error: 'No customer IDs provided for deletion' });
+  }
+
+  try {
+    const customers = await prisma.customer.findMany({
+      where: {
+        id: { in: ids },
+        tenantId: req.tenantId,
+      },
+    });
+
+    let deleted = 0;
+    const skipped: string[] = [];
+
+    for (const cust of customers) {
+      const invoiceCount = await prisma.invoice.count({
+        where: { customerId: cust.id, tenantId: req.tenantId },
+      });
+
+      if (invoiceCount > 0) {
+        skipped.push(`${cust.legalName} (${invoiceCount} invoice(s) linked)`);
+        continue;
+      }
+
+      await prisma.customerGroupMember.deleteMany({
+        where: { customerId: cust.id },
+      });
+
+      await prisma.customer.delete({
+        where: { id: cust.id },
+      });
+
+      deleted++;
+    }
+
+    await logAuditAction({
+      tenantId: req.tenantId,
+      userId: req.userId,
+      action: 'CUSTOMERS_BULK_DELETED',
+      entityName: 'Customer',
+      metadata: { requestedCount: ids.length, deleted, skippedCount: skipped.length, skipped },
+      ipAddress: req.ip,
+    });
+
+    return res.json({
+      success: true,
+      deleted,
+      skipped,
+      message: `Successfully deleted ${deleted} customer(s).${skipped.length > 0 ? ` Skipped ${skipped.length} with existing invoices.` : ''}`,
+    });
+  } catch (error: any) {
+    console.error('Bulk delete customer error:', error);
+    return res.status(500).json({ error: error.message || 'Failed to bulk delete customers' });
+  }
+});
+
 export default router;
