@@ -23,7 +23,7 @@ interface Company {
   id: string;
   legalName: string;
   tradeName?: string;
-  gstin: string;
+  gstin?: string;
   pan: string;
   addressLine1: string;
   addressLine2?: string;
@@ -110,7 +110,7 @@ function Companies() {
         !query ||
         c.legalName.toLowerCase().includes(query) ||
         (c.tradeName && c.tradeName.toLowerCase().includes(query)) ||
-        c.gstin.toLowerCase().includes(query) ||
+        (c.gstin && c.gstin.toLowerCase().includes(query)) ||
         c.pan.toLowerCase().includes(query) ||
         c.city.toLowerCase().includes(query) ||
         c.state.toLowerCase().includes(query) ||
@@ -287,8 +287,8 @@ function Companies() {
               <input type="text" name="tradeName" value={formData.tradeName} onChange={handleInputChange} className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:bg-white focus:border-blue-500 outline-none" />
             </div>
             <div>
-              <label className="block text-xs font-semibold uppercase text-slate-500 mb-1">GSTIN *</label>
-              <input type="text" required name="gstin" value={formData.gstin} onChange={handleInputChange} className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-mono focus:bg-white focus:border-blue-500 outline-none" placeholder="27AAAAA1111A1Z1" />
+              <label className="block text-xs font-semibold uppercase text-slate-500 mb-1">GSTIN (Optional)</label>
+              <input type="text" name="gstin" value={formData.gstin} onChange={handleInputChange} className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-mono focus:bg-white focus:border-blue-500 outline-none" placeholder="27AAAAA1111A1Z1 (Optional)" />
             </div>
             <div>
               <label className="block text-xs font-semibold uppercase text-slate-500 mb-1">PAN *</label>
@@ -562,7 +562,7 @@ function Companies() {
                           <td className="py-3.5 px-4">
                             <div className="space-y-0.5">
                               <div className="font-mono text-xs font-semibold text-slate-800">
-                                <span className="text-slate-400 font-normal">GST:</span> {company.gstin}
+                                <span className="text-slate-400 font-normal">GST:</span> {company.gstin || 'URD / None'}
                               </div>
                               <div className="font-mono text-xs text-slate-500">
                                 <span className="text-slate-400 font-normal">PAN:</span> {company.pan}
@@ -659,7 +659,7 @@ function Companies() {
                     <div className="grid grid-cols-2 gap-y-2.5 gap-x-4 border-t border-slate-100 pt-4 text-xs">
                       <div>
                         <span className="text-slate-400 font-medium block">GSTIN / PAN</span>
-                        <span className="text-slate-800 font-semibold">{company.gstin} / {company.pan}</span>
+                        <span className="text-slate-800 font-semibold">{company.gstin || 'URD'} / {company.pan}</span>
                       </div>
                       <div>
                         <span className="text-slate-400 font-medium block">Prefix Format</span>

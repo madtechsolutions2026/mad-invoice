@@ -63,8 +63,8 @@ router.post(
   async (req: Request, res: Response) => {
     const data = req.body;
 
-    if (!data.legalName || !data.gstin || !data.pan || !data.state || !data.stateCode) {
-      return res.status(400).json({ error: 'Required fields missing: legalName, gstin, pan, state, stateCode' });
+    if (!data.legalName || !data.pan || !data.state || !data.stateCode) {
+      return res.status(400).json({ error: 'Required fields missing: legalName, pan, state, stateCode' });
     }
 
     try {
@@ -73,7 +73,7 @@ router.post(
           tenantId: req.tenantId,
           legalName: data.legalName,
           tradeName: data.tradeName || null,
-          gstin: data.gstin,
+          gstin: data.gstin ? data.gstin.trim() : '',
           pan: data.pan,
           addressLine1: data.addressLine1 || '',
           addressLine2: data.addressLine2 || null,
@@ -132,7 +132,7 @@ router.put(
         data: {
           legalName: data.legalName,
           tradeName: data.tradeName,
-          gstin: data.gstin,
+          gstin: data.gstin !== undefined ? (data.gstin ? data.gstin.trim() : '') : undefined,
           pan: data.pan,
           addressLine1: data.addressLine1,
           addressLine2: data.addressLine2,

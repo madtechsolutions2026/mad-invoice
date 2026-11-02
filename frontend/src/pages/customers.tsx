@@ -47,6 +47,7 @@ function Customers() {
   });
 
   const [importing, setImporting] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [importResult, setImportResult] = useState<{summary: any, errors: string[]} | null>(null);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
@@ -153,10 +154,29 @@ function Customers() {
     }
   };
 
-  const handleExportExcel = () => {
-    const link = document.createElement('a');
-    link.href = '/api/customers/export';
-    link.click();
+  const handleExportExcel = async () => {
+    setExporting(true);
+    try {
+      const res = await axios.get('/api/customers/export', {
+        responseType: 'blob',
+      });
+      const blob = new Blob([res.data], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `Customer_Master_${new Date().toISOString().split('T')[0]}.xlsx`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (err: any) {
+      console.error('Export customer failed:', err);
+      alert(err.response?.data?.error || 'Failed to export customer data');
+    } finally {
+      setExporting(false);
+    }
   };
 
   const toggleSelectAll = () => {
@@ -289,10 +309,11 @@ function Customers() {
             </button>
             <button
               onClick={handleExportExcel}
-              className="px-3 py-2 bg-slate-700 hover:bg-slate-800 text-white font-medium rounded-lg text-sm transition-colors flex items-center gap-1.5"
+              disabled={exporting}
+              className="px-3 py-2 bg-slate-700 hover:bg-slate-800 disabled:opacity-50 text-white font-medium rounded-lg text-sm transition-colors flex items-center gap-1.5"
             >
               <Download className="h-4 w-4" />
-              Export Excel
+              {exporting ? 'Exporting...' : 'Export Excel'}
             </button>
             <button
               onClick={handleNewClick}
