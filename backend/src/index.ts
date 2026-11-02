@@ -14,6 +14,7 @@ import batchRoutes from './modules/batches/batches.controller';
 import invoiceRoutes from './modules/invoices/invoices.controller';
 import reportRoutes from './modules/reports/reports.controller';
 import groupRoutes from './modules/groups/groups.controller';
+import adminRoutes from './modules/admin/admin.controller';
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -38,6 +39,7 @@ app.use('/api/batches', batchRoutes);
 app.use('/api/invoices', invoiceRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/customer-groups', groupRoutes);
+app.use('/api/admin', adminRoutes);
 
 // Health check endpoint
 app.get('/health', (req: Request, res: Response) => {

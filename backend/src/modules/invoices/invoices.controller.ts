@@ -4,6 +4,7 @@ import prisma from '../../config/db';
 import { authMiddleware } from '../../middleware/auth.middleware';
 import StorageProvider from '../../utils/storage';
 import { logAuditAction } from '../audit/audit.service';
+import { processInvoiceJob } from '../../workers/processor';
 
 const router = Router();
 
@@ -137,6 +138,139 @@ router.get('/:id', authMiddleware, async (req: Request, res: Response) => {
     });
   } catch (error) {
     return res.status(500).json({ error: 'Failed to retrieve invoice details' });
+  }
+});
+
+// POST /api/invoices/manual - Create and immediately render a single manual invoice
+router.post('/manual', authMiddleware, async (req: Request, res: Response) => {
+  const {
+    companyId,
+    customerId,
+    invoiceNumber,
+    invoiceDate,
+    dueDate,
+    placeOfSupply,
+    poNumber,
+    poDate,
+    remarks,
+    items,
+  } = req.body;
+
+  if (!companyId || !customerId) {
+    return res.status(400).json({ error: 'companyId and customerId are required' });
+  }
+
+  if (!Array.isArray(items) || items.length === 0) {
+    return res.status(400).json({ error: 'At least one invoice line item is required' });
+  }
+
+  try {
+    const customer = await prisma.customer.findFirst({
+      where: { id: customerId, tenantId: req.tenantId },
+    });
+
+    if (!customer) {
+      return res.status(404).json({ error: 'Customer not found' });
+    }
+
+    // Resolve invoice number
+    let finalInvoiceNumber = (invoiceNumber || '').trim();
+    if (!finalInvoiceNumber) {
+      const { nextNo, prefix } = await prisma.$transaction(async (tx) => {
+        const company = await tx.company.findFirst({
+          where: { id: companyId, tenantId: req.tenantId },
+        });
+
+        if (!company) {
+          throw new Error('Company not found');
+        }
+
+        const currentNo = company.invoiceStartingNo;
+        await tx.company.update({
+          where: { id: companyId },
+          data: { invoiceStartingNo: currentNo + 1 },
+        });
+
+        return { nextNo: currentNo, prefix: company.invoicePrefix || 'INV/' };
+      });
+
+      finalInvoiceNumber = `${prefix}${String(nextNo).padStart(5, '0')}`;
+    }
+
+    // Check for existing invoice with this number
+    const existing = await prisma.invoice.findFirst({
+      where: {
+        tenantId: req.tenantId,
+        companyId,
+        invoiceNumber: finalInvoiceNumber,
+      },
+    });
+
+    if (existing) {
+      return res.status(400).json({
+        error: `Invoice number "${finalInvoiceNumber}" already exists for this billing company.`,
+      });
+    }
+
+    const resolvedPlaceOfSupply = placeOfSupply || customer.state;
+
+    const formattedItems = items.map((it: any) => ({
+      hsnSac: (it.hsnSac || '9983').toString().trim(),
+      description: (it.description || '').toString().trim(),
+      quantity: parseFloat(it.quantity) || 1,
+      unit: (it.unit || 'NOS').toString().trim(),
+      rate: parseFloat(it.rate) || 0,
+      discount: parseFloat(it.discount) || 0,
+      gstRate: parseFloat(it.gstRate) || 0,
+    }));
+
+    // Process & generate PDF immediately
+    await processInvoiceJob({
+      tenantId: req.tenantId,
+      batchId: null,
+      companyId,
+      customerId,
+      invoiceNumber: finalInvoiceNumber,
+      invoiceDate: invoiceDate || new Date().toISOString().split('T')[0],
+      placeOfSupply: resolvedPlaceOfSupply,
+      poNumber: poNumber || null,
+      poDate: poDate || null,
+      dueDate: dueDate || null,
+      remarks: remarks || null,
+      items: formattedItems,
+    });
+
+    const created = await prisma.invoice.findFirst({
+      where: {
+        tenantId: req.tenantId,
+        companyId,
+        invoiceNumber: finalInvoiceNumber,
+      },
+      include: {
+        company: true,
+        customer: true,
+        items: true,
+      },
+    });
+
+    await logAuditAction({
+      tenantId: req.tenantId,
+      userId: req.userId,
+      action: 'INVOICE_MANUALLY_CREATED',
+      entityName: 'Invoice',
+      entityId: created?.id,
+      metadata: { invoiceNumber: finalInvoiceNumber, totalAmount: created?.totalAmount },
+      ipAddress: req.ip,
+    });
+
+    return res.status(201).json({
+      success: true,
+      invoice: created,
+      message: `Invoice ${finalInvoiceNumber} generated successfully`,
+    });
+  } catch (error: any) {
+    console.error('Manual invoice creation error:', error);
+    return res.status(500).json({ error: error.message || 'Failed to create manual invoice' });
   }
 });
 
