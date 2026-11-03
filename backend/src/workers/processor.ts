@@ -127,7 +127,9 @@ export async function processInvoiceJob(jobData: any) {
 
   if (invoice.status === InvoiceStatus.GENERATED) {
     console.log(`[Processor] Invoice ${invoiceNumber} already complete. Skipping PDF render.`);
-    await checkAndZipBatch(tenantId, batchId);
+    if (batchId) {
+      await checkAndZipBatch(tenantId, batchId);
+    }
     return;
   }
 
@@ -157,7 +159,9 @@ export async function processInvoiceJob(jobData: any) {
     console.log(`[Processor] Completed invoice ${invoiceNumber} generation`);
 
     // 5. Check and run ZIP compiler if this completes the batch
-    await checkAndZipBatch(tenantId, batchId);
+    if (batchId) {
+      await checkAndZipBatch(tenantId, batchId);
+    }
   } catch (error: any) {
     console.error(`[Processor] Failed to generate PDF for ${invoiceNumber}:`, error);
     await prisma.invoice.update({
@@ -171,7 +175,8 @@ export async function processInvoiceJob(jobData: any) {
   }
 }
 
-async function checkAndZipBatch(tenantId: string, batchId: string) {
+async function checkAndZipBatch(tenantId: string, batchId?: string | null) {
+  if (!batchId) return;
   const batch = await prisma.invoiceBatch.findUnique({ where: { id: batchId } });
   if (!batch) return;
 

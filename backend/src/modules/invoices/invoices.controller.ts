@@ -206,7 +206,7 @@ router.post('/manual', authMiddleware, async (req: Request, res: Response) => {
       },
     });
 
-    if (existing) {
+    if (existing && existing.status === 'GENERATED') {
       return res.status(400).json({
         error: `Invoice number "${finalInvoiceNumber}" already exists for this billing company.`,
       });
