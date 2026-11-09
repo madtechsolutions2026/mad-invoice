@@ -40,6 +40,7 @@
 
 import PDFDocument from 'pdfkit';
 import QRCode from 'qrcode';
+import { getPreviousBillingMonth, getCompanyStampLines, resolveCompanyStampPath } from './invoice-presentation';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -350,8 +351,7 @@ async function buildPage(
   // SECTION 4: REFERENCE LINE
   // ══════════════════════════════════════════════════════════════════════════
 
-  const refMonth = new Date(invoice.invoiceDate)
-    .toLocaleString('en-US', { month: 'long', year: 'numeric' });
+  const refMonth = getPreviousBillingMonth(invoice.invoiceDate);
   doc.font('NotoSans-Bold').fontSize(SZ_BODY).fillColor(C_DARK)
      .text('Reference: ', ML, y, { continued: true });
   rg(SZ_BODY).text(`Professional charges for the month of ${refMonth}`, { width: CW });
@@ -402,25 +402,17 @@ async function buildPage(
     const descH   = doc.font('NotoSans-Bold').fontSize(SZ_BODY).heightOfString(desc, {
       width: cItem,
     });
-    const hsnLine = item.hsnSac ? `HSN/SAC: ${item.hsnSac}` : '';
-    const hsnH    = hsnLine
-      ? doc.font('NotoSans').fontSize(8).heightOfString(hsnLine, { width: cItem })
-      : 0;
     const ROW_PAD = 6;
-    const rowH    = Math.max(descH + (hsnH ? hsnH + 2 : 0), SZ_BODY) + ROW_PAD * 2;
+    const rowH    = Math.max(descH, SZ_BODY) + ROW_PAD * 2;
 
     cx = ML;
     // Row number
     rg(SZ_BODY).text(String(i + 1), cx, y + ROW_PAD, { width: cNo, align: 'left' });
     cx += cNo;
 
-    // Description (bold) + HSN below it
+    // Item description
     doc.font('NotoSans-Bold').fontSize(SZ_BODY).fillColor(C_DARK)
        .text(desc, cx, y + ROW_PAD, { width: cItem });
-    if (hsnLine) {
-      doc.font('NotoSans').fontSize(8).fillColor(C_MUTED)
-         .text(hsnLine, cx, y + ROW_PAD + descH + 2, { width: cItem });
-    }
     cx += cItem;
 
     // Rate / Qty / Amount  – all at same Y, right-aligned
@@ -572,24 +564,43 @@ async function buildPage(
        width: sigNameW, align: 'right',
      });
 
-  // Render Stamp if available
+  // Preserve the supplied stamp's proportions in a larger signature area.
   let stampRendered = false;
   let stampBottom = payY + 45;
-  if (company.stampStorageKey) {
-    const stampPath = path.join(process.cwd(), 'storage', company.stampStorageKey);
-    if (fs.existsSync(stampPath)) {
-      const stampW = 75;
-      const stampH = 50;
-      const stampX = SIG_X + sigNameW - stampW - 20;
-      const stampY = payY + 12;
-      doc.image(stampPath, stampX, stampY, {
-        fit: [stampW, stampH],
-        align: 'center',
-        valign: 'center',
-      });
-      stampRendered = true;
-      stampBottom = stampY + stampH;
+  const stampPath = resolveCompanyStampPath(company);
+  if (stampPath) {
+    const stampW = Math.min(165, sigNameW - 4);
+    const stampH = 110;
+    const stampX = SIG_X + sigNameW - stampW;
+    const stampY = payY + 15;
+    doc.image(stampPath, stampX, stampY, { fit: [stampW, stampH], align: 'center', valign: 'center' });
+    stampRendered = true;
+    stampBottom = stampY + stampH;
+  }
+
+  // Use a clear company-name stamp when no custom image has been uploaded.
+  if (!stampRendered) {
+    const [name, city] = getCompanyStampLines(company);
+    const stampW = Math.min(144, sigNameW - 4);
+    const stampH = 56;
+    const stampX = SIG_X + sigNameW - stampW - 2;
+    const stampY = payY + 15;
+    const ink = '#24549b';
+    doc.save();
+    doc.roundedRect(stampX, stampY, stampW, stampH, 3).strokeColor(ink).lineWidth(1).stroke();
+    doc.roundedRect(stampX + 3, stampY + 3, stampW - 6, stampH - 6, 2).lineWidth(0.45).stroke();
+    let stampFontSize = 8.5;
+    doc.font('NotoSans-Bold').fontSize(stampFontSize);
+    while (doc.heightOfString(name, { width: stampW - 16, lineGap: 1 }) > 28 && stampFontSize > 6) {
+      stampFontSize -= 0.5;
+      doc.fontSize(stampFontSize);
     }
+    const nameHeight = doc.heightOfString(name, { width: stampW - 16, lineGap: 1 });
+    const nameY = stampY + (stampH - nameHeight - (city ? 12 : 0)) / 2;
+    doc.fillColor(ink).text(name, stampX + 8, nameY, { width: stampW - 16, align: 'center', lineGap: 1 });
+    if (city) doc.font('NotoSans').fontSize(7).text(city, stampX + 8, stampY + stampH - 16, { width: stampW - 16, align: 'center' });
+    doc.restore();
+    stampBottom = stampY + stampH;
   }
 
   // Signature line lowered down
@@ -620,24 +631,7 @@ async function buildPage(
   y = payY + Math.max(leftBlockH, Math.max(bkY - bankStartY, rightBlockH)) + 12;
 
   // ══════════════════════════════════════════════════════════════════════════
-  // SECTION 8: NOTES  (FIX 4: full-width, never clipped)
-  // ══════════════════════════════════════════════════════════════════════════
-
-  doc.font('NotoSans-Bold').fontSize(SZ_LABEL).fillColor(C_DARK)
-     .text('Notes: ', ML, y, { continued: true });
-  // FIX 4: width: CW ensures text wraps inside the page, never clips
-  rg(SZ_BODY).text(
-    'We sincerely appreciate your business. Kindly ensure payment is made within 15 days. '
-    + 'Should you have any inquiries regarding this invoice, please do not hesitate to contact us.',
-    { width: CW },
-  );
-  y += doc.heightOfString(
-    'We sincerely appreciate your business. Kindly ensure payment is made within 15 days.',
-    { width: CW },
-  ) + 20;
-
-  // ══════════════════════════════════════════════════════════════════════════
-  // SECTION 9: FOOTER – pinned near bottom, within margins
+  // SECTION 8: FOOTER – pinned near bottom, within margins
   // ══════════════════════════════════════════════════════════════════════════
 
   const FOOTER_Y = doc.page.height - 28;
@@ -646,7 +640,7 @@ async function buildPage(
 
   // Left: page info
   doc.font('NotoSans').fontSize(SZ_SMALL).fillColor(C_MUTED)
-     .text('Page 1 / 1  \u2022  This is a digitally signed document.', ML, FOOTER_Y);
+     .text('Page 1 / 1  \u2022  This is a computer-generated invoice.', ML, FOOTER_Y);
 
   // Right: branding (existing "Powered By MadTech")
   doc.font('NotoSans-Bold').fontSize(SZ_SMALL).fillColor(C_DARK)

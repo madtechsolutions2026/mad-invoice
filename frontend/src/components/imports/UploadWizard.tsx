@@ -94,7 +94,7 @@ function UploadWizard({ onBatchCreated }: UploadWizardProps) {
     { key: 'customerState', label: 'Customer State', required: true },
     { key: 'customerStateCode', label: 'Customer State Code', required: true },
     { key: 'customerPinCode', label: 'Customer PIN Code', required: true },
-    { key: 'hsnSac', label: 'HSN / SAC Code', required: true },
+    { key: 'hsnSac', label: 'HSN / SAC Code (optional)', required: false },
     { key: 'description', label: 'Item Description', required: true },
     { key: 'quantity', label: 'Quantity', required: true },
     { key: 'unit', label: 'Unit (e.g. PCS, KGS)', required: true },

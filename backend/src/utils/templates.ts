@@ -1,5 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import { getPreviousBillingMonth, renderCompanyNameStamp, resolveCompanyStampPath } from './invoice-presentation';
 
 interface TemplateData {
   company: any;
@@ -25,15 +26,13 @@ export function renderInvoiceTemplate(data: TemplateData): string {
     }
   }
 
-  // Resolve custom stamp if available
+  // Resolve uploaded branding or the firm-specific supplied stamp.
   let stampSrc: string | null = null;
-  if (company.stampStorageKey) {
-    const stampPath = path.join(process.cwd(), 'storage', company.stampStorageKey);
-    if (fs.existsSync(stampPath)) {
-      const ext = path.extname(company.stampStorageKey).toLowerCase().replace('.', '');
-      const mime = ext === 'png' ? 'image/png' : ext === 'gif' ? 'image/gif' : ext === 'webp' ? 'image/webp' : 'image/jpeg';
-      stampSrc = `data:${mime};base64,${fs.readFileSync(stampPath).toString('base64')}`;
-    }
+  const stampPath = resolveCompanyStampPath(company);
+  if (stampPath) {
+    const ext = path.extname(stampPath).toLowerCase().replace('.', '');
+    const mime = ext === 'png' ? 'image/png' : ext === 'gif' ? 'image/gif' : ext === 'webp' ? 'image/webp' : 'image/jpeg';
+    stampSrc = 'data:' + mime + ';base64,' + fs.readFileSync(stampPath).toString('base64');
   }
 
   // Formatted Dates
@@ -63,7 +62,6 @@ export function renderInvoiceTemplate(data: TemplateData): string {
         <td style="text-align: left; font-weight: 500; width: 4%;">${index + 1}</td>
         <td style="text-align: left; font-weight: 700; width: 56%; text-transform: uppercase;">
           ${item.description}
-          ${item.hsnSac ? `<div style="font-weight: normal; font-size: 9.5px; color: #64748b; margin-top: 2px;">HSN/SAC: ${item.hsnSac}</div>` : ''}
         </td>
         <td style="text-align: right; font-weight: 600; width: 16%;">${rate}</td>
         <td style="text-align: center; font-weight: 500; width: 8%;">${qty} ${unit}</td>
@@ -239,14 +237,6 @@ export function renderInvoiceTemplate(data: TemplateData): string {
           vertical-align: top;
         }
 
-        /* Notes Box */
-        .notes-container {
-          margin-top: 15px;
-          font-size: 9.5px;
-          color: #475569;
-          line-height: 1.4;
-        }
-
         /* Footer Bar */
         .footer-bar {
           margin-top: 30px;
@@ -318,7 +308,7 @@ export function renderInvoiceTemplate(data: TemplateData): string {
 
         <!-- Reference Line -->
         <div class="reference-box">
-          Reference: <strong>Professional charges for the month of ${new Date(invoice.invoiceDate).toLocaleString('en-US', { month: 'long', year: 'numeric' })}</strong>
+          Reference: <strong>Professional charges for the month of ${getPreviousBillingMonth(invoice.invoiceDate)}</strong>
         </div>
 
         <!-- Items Table -->
@@ -377,8 +367,8 @@ export function renderInvoiceTemplate(data: TemplateData): string {
               <div style="font-size: 10px; font-weight: 700; color: #475569; text-transform: uppercase;">
                 For ${company.legalName}
               </div>
-              <div style="min-height: 55px; display: flex; align-items: center; justify-content: flex-end; margin: 4px 0;">
-                ${stampSrc ? `<img src="${stampSrc}" style="max-height: 55px; max-width: 100px; object-fit: contain;" alt="Company Stamp" />` : '<div style="height: 45px;"></div>'}
+              <div style="min-height: 114px; display: flex; align-items: center; justify-content: flex-end; margin: 4px 0;">
+                ${stampSrc ? `<img src="${stampSrc}" style="max-height: 110px; max-width: 165px; object-fit: contain;" alt="Company Stamp" />` : renderCompanyNameStamp(company)}
               </div>
               <div style="border-top: 1px solid #334155; display: inline-block; min-width: 130px; padding-top: 4px; margin-top: 2px;">
                 ${company.authorizedSignatoryName ? `<div style="font-size: 10.5px; font-weight: 800; color: #0f172a;">${company.authorizedSignatoryName}</div>` : ''}
@@ -390,15 +380,9 @@ export function renderInvoiceTemplate(data: TemplateData): string {
           </tr>
         </table>
 
-        <!-- Notes -->
-        <div class="notes-container">
-          <strong>Notes:</strong><br>
-          We sincerely appreciate your business. Kindly ensure payment is made within 15 days. Should you have any inquiries regarding this invoice, please do not hesitate to contact us.
-        </div>
-
         <!-- Footer -->
         <div class="footer-bar">
-          <div>Page 1/1 • This is a digitally signed document.</div>
+          <div>Page 1/1 • This is a computer-generated invoice.</div>
           <div style="font-weight: 700; color: #0f172a;">Powered By MadTech</div>
         </div>
 

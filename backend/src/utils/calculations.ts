@@ -34,7 +34,7 @@ export function computeInvoiceTotals(
   companyStateCode: string,
   customerStateCode: string,
   rawItems: Array<{
-    hsnSac: string;
+    hsnSac?: string;
     description: string;
     quantity: number;
     unit: string;
@@ -86,7 +86,7 @@ export function computeInvoiceTotals(
     totalDiscount = totalDiscount.add(disc);
 
     return {
-      hsnSac: item.hsnSac,
+      hsnSac: String(item.hsnSac ?? '').trim(),
       description: item.description,
       quantity: qty,
       unit: item.unit,
