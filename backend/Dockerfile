@@ -17,6 +17,7 @@ RUN npm install --omit=dev --no-audit --no-fund && \
     rm -rf /root/.npm /tmp/*
 
 COPY dist ./dist
+COPY src/assets ./src/assets
 
 RUN mkdir -p storage/invoices storage/batches
 
