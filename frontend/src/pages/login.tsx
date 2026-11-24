@@ -39,20 +39,6 @@ export default function Login({ onLoginSuccess, onSwitchToRegister }: LoginProps
       <div className="auth-field"><label htmlFor="login-email">E-mail</label><input id="login-email" name="email" type="email" autoComplete="username" placeholder="you@company.com" value={email} onChange={event => setEmail(event.target.value)} required/></div>
       <div className="auth-field"><label htmlFor="login-password">Password</label><div className="auth-password"><input id="login-password" name="password" type={showPassword ? 'text' : 'password'} autoComplete="current-password" placeholder="Enter your password" value={password} onChange={event => setPassword(event.target.value)} required/><PasswordToggle visible={showPassword} onToggle={() => setShowPassword(!showPassword)}/></div></div>
       <button className="auth-primary" type="submit" disabled={loading}>{loading ? 'Signing in…' : 'Sign In'}</button>
-      <div style={{ marginTop: '1.25rem', padding: '0.75rem', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '0.8rem', color: '#475569' }}>
-        <div style={{ fontWeight: 600, color: '#1e293b', marginBottom: '0.25rem' }}>Default Client: Shaik & Reddy Associates</div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-          <span><strong>User:</strong> shaikandreddy@gmail.com</span>
-          <span><strong>Pass:</strong> Shaik@2026</span>
-        </div>
-        <button 
-          type="button" 
-          onClick={() => { setEmail('shaikandreddy@gmail.com'); setPassword('Shaik@2026'); }}
-          style={{ width: '100%', padding: '0.4rem', background: '#e0e7ff', border: '1px solid #c7d2fe', borderRadius: '6px', color: '#3730a3', fontWeight: 600, cursor: 'pointer', fontSize: '0.75rem' }}
-        >
-          Auto-fill Shaik & Reddy Login
-        </button>
-      </div>
       <p className="auth-note"><LockKeyhole size={13}/>One place for your invoices, customers, and company.</p>
     </form>
   </AuthLayout>;
