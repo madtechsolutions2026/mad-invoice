@@ -2,7 +2,15 @@
 dist/
 build/
 .env
+.env.*
+!.env.example
 .DS_Store
 uploads/
 coverage/
 *.log
+*.pem
+storage/
+backend/storage/
+backups/
+*.sql
+*.dump

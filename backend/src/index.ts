@@ -6,7 +6,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import { tenantMiddleware } from './middleware/tenant.middleware';
 
-import authRoutes from './modules/auth/auth.controller';
+import authRoutes from './modules/auth/auth.routes';
 import companyRoutes from './modules/companies/companies.controller';
 import customerRoutes from './modules/customers/customers.controller';
 import importRoutes from './modules/imports/imports.controller';
