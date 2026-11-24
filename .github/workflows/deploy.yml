@@ -1,0 +1,75 @@
+name: Deploy to EC2 Production
+
+on:
+  push:
+    branches:
+      - main
+      - master
+      - learn-auth-from-scratch
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: |
+            backend/package.json
+            frontend/package.json
+
+      - name: Build Backend & Generate Prisma
+        run: |
+          cd backend
+          npm ci
+          npx prisma generate
+          npm run build
+
+      - name: Build Frontend (Vite SPA)
+        run: |
+          cd frontend
+          npm ci
+          npm run build
+
+      - name: Configure SSH Key
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.EC2_SSH_KEY }}
+
+      - name: Deploy to EC2 & Reload Containers
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USER: ${{ secrets.EC2_USER || 'ubuntu' }}
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H $EC2_HOST >> ~/.ssh/known_hosts
+
+          echo "==> Syncing Backend build and assets to EC2..."
+          rsync -avz --delete backend/dist/ $EC2_USER@$EC2_HOST:~/mad-invoice/backend/dist/
+          rsync -avz --delete backend/src/assets/ $EC2_USER@$EC2_HOST:~/mad-invoice/backend/src/assets/
+          rsync -avz backend/prisma/ $EC2_USER@$EC2_HOST:~/mad-invoice/backend/prisma/
+          rsync -avz backend/Dockerfile $EC2_USER@$EC2_HOST:~/mad-invoice/backend/Dockerfile
+          rsync -avz backend/package.json $EC2_USER@$EC2_HOST:~/mad-invoice/backend/package.json
+
+          echo "==> Syncing Frontend build and configs to EC2..."
+          rsync -avz --delete frontend/dist/ $EC2_USER@$EC2_HOST:~/mad-invoice/frontend/dist/
+          rsync -avz frontend/nginx.conf $EC2_USER@$EC2_HOST:~/mad-invoice/frontend/nginx.conf
+          rsync -avz docker-compose.prod.yml $EC2_USER@$EC2_HOST:~/mad-invoice/docker-compose.prod.yml
+
+          echo "==> Updating running Docker containers and reloading services..."
+          ssh $EC2_USER@$EC2_HOST "
+            sudo docker cp ~/mad-invoice/backend/dist/. mad_invoice_backend:/app/dist/
+            sudo docker cp ~/mad-invoice/backend/dist/. mad_invoice_worker:/app/dist/
+            sudo docker cp ~/mad-invoice/backend/src/assets/. mad_invoice_backend:/app/src/assets/
+            sudo docker cp ~/mad-invoice/backend/src/assets/. mad_invoice_worker:/app/src/assets/
+            sudo docker cp ~/mad-invoice/frontend/dist/. mad_invoice_frontend:/usr/share/nginx/html/
+            sudo docker exec mad_invoice_backend npx prisma migrate deploy || true
+            sudo docker restart mad_invoice_backend mad_invoice_worker
+            sudo docker exec mad_invoice_frontend nginx -s reload
+          "
+          echo "==> Deployment to https://invoice.madtechsolutions.tech completed successfully!"
